@@ -15,6 +15,7 @@ import shiny
 import pandas as pd
 import plotly.express as px
 from shiny import App, ui, render
+import xarray as xr
 
 # ============================
 # CARGA DE DATOS
@@ -27,6 +28,13 @@ df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 df["year"] = df["valid_time"].dt.year
 df["month"] = df["valid_time"].dt.month
 df["month_name"] = df["valid_time"].dt.month_name()  # si el locale da problema, lo dejamos así
+
+
+DATA_NC = "C:/Users/ASUS/Downloads/datos.nc"
+ds = xr.open_dataset(DATA_NC)
+
+# Convertir a dataframe
+df_nc = ds.to_dataframe().reset_index()
 
 # ============================
 # INTERFAZ BÁSICA (UI)
@@ -45,7 +53,22 @@ app_ui = ui.page_fluid(
         },
         selected="Temperatura_C",
     ),
-    ui.output_plot("plot_basic")
+    ui.output_plot("plot_basic"),
+    
+    ui.hr(),
+    
+    ui.h3("Mapa"),
+    ui.input_select(
+        "var_map",
+        "Variable para mapa:",
+        {
+            "t2m": "Temperatura (°C)",
+            "tp": "Precipitacion (mm)",
+            "ssrd": "Radiación (W/m²)",
+            },
+            selected="tp"
+    ),
+    ui.output_plot("plot_map")
 )
 
 # ============================
@@ -71,8 +94,23 @@ def server(input, output, session):
             title=f"Evolución anual de {var}"
         )
         return fig
+    
+    @output
+    @render.plot
+    def plot_map():
+        var = input.var_map()
+        
+        fig = px.scatter_geo(
+            df_nc,
+            lat="latitude",
+            lon="longitude",
+            color=var,
+            title=f"Mapa de {var}"
+        )
+        
+        return fig
 
-
+    
 # ============================
 # EJECUCIÓN DE LA APP
 # ============================
