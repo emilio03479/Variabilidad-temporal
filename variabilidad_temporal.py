@@ -5,8 +5,6 @@ Created on Fri Nov 21 20:32:35 2025
 @author: ezcem
 """
 
-#http://127.0.0.1:8000 
-
 # ============================
 # LIBRERIAS
 # ============================
@@ -21,7 +19,7 @@ import xarray as xr
 # CARGA DE DATOS
 # ============================
 
-DATA_PATH = "C:/Users/kelmb/Downloads/BASE/ERA5_CR_2000_2025_promedios.csv"
+DATA_PATH = "C:/Users/kelmb/OneDrive/Documentos/GitHub/Variabilidad-temporal/ERA5_CR_2000_2025_promedios.csv"
 df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 
 # Crear columnas de tiempo
