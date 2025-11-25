@@ -19,7 +19,7 @@ import xarray as xr
 # CARGA DE DATOS
 # ============================
 
-DATA_PATH = "C:/Users/kelmb/OneDrive/Documentos/GitHub/Variabilidad-temporal/ERA5_CR_2000_2025_promedios.csv"
+DATA_PATH = "ERA5_CR_2000_2025_promedios.csv"#lo mantenemos así, ya está en el directorio
 df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 
 # Crear columnas de tiempo
@@ -28,7 +28,7 @@ df["month"] = df["valid_time"].dt.month
 df["month_name"] = df["valid_time"].dt.month_name()  # si el locale da problema, lo dejamos así
 
 
-DATA_NC = "C:/Users/ASUS/Downloads/datos.nc"
+DATA_NC = "datos.nc"
 ds = xr.open_dataset(DATA_NC)
 
 # Convertir a dataframe
