@@ -9,103 +9,83 @@ Created on Fri Nov 21 20:32:35 2025
 # LIBRERIAS
 # ============================
 
-import shiny
 import pandas as pd
 import plotly.express as px
-from shiny import App, ui, render
+from shiny import App, ui
+from shinywidgets import render_widget, output_widget
 import xarray as xr
 
 # ============================
 # CARGA DE DATOS
 # ============================
 
-DATA_PATH = "ERA5_CR_2000_2025_promedios.csv"#lo mantenemos así, ya está en el directorio
+DATA_PATH = "ERA5_CR_2000_2025_promedios.csv"
 df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 
-# Crear columnas de tiempo
 df["year"] = df["valid_time"].dt.year
 df["month"] = df["valid_time"].dt.month
-df["month_name"] = df["valid_time"].dt.month_name()  # si el locale da problema, lo dejamos así
-
+df["month_name"] = df["valid_time"].dt.month_name()
 
 DATA_NC = "datos.nc"
 ds = xr.open_dataset(DATA_NC)
-
-# Convertir a dataframe
 df_nc = ds.to_dataframe().reset_index()
 
-# ============================
-# INTERFAZ BÁSICA (UI)
-# ============================
+# Mapa entre nombres bonitos y nombres reales
+VAR_MAP = {
+    "Temperatura (°C)": "Temperatura_C",
+    "Precipitación (mm)": "Precipitacion_mm",
+    "Radiación (W/m²)": "Radiacion_Wm2",
+}
 
 app_ui = ui.page_fluid(
-    ui.h2("Analisis de la variabilidad temporal y espacial de precipitación"),
+    ui.h2("Análisis de la variabilidad temporal y espacial"),
     ui.hr(),
+
     ui.input_select(
         "var",
         "Variable a graficar:",
-        {
-            "Temperatura_C": "Temperatura (°C)",
-            "Precipitacion_mm": "Precipitación (mm)",
-            "Radiacion_Wm2": "Radiación (W/m²)",
-        },
-        selected="Temperatura_C",
+        list(VAR_MAP.keys()),
+        selected="Temperatura (°C)"
     ),
-    ui.output_plot("plot_basic"),
-    
+
+    output_widget("plot_basic"),
+
     ui.hr(),
-    
     ui.h3("Mapa"),
+
     ui.input_select(
         "var_map",
         "Variable para mapa:",
         {
             "t2m": "Temperatura (°C)",
-            "tp": "Precipitacion (mm)",
+            "tp": "Precipitación (mm)",
             "ssrd": "Radiación (W/m²)",
-            },
-            selected="tp"
+        },
+        selected="tp"
     ),
-    ui.output_plot("plot_map")
-)
 
-# ============================
-# SERVER
-# ============================
+    output_widget("plot_map"),
+)
 
 def server(input, output, session):
 
-    @output #DECORADOR: Conecta una función del servidor con un espacio visible en la interfaz.
-    @render.plot #RENDER: Indica qué tipo de cosa genera la función (ej:plot).
+    # ==============================
+    # SERIE TEMPORAL (plotly widget)
+    # ==============================
+    @render_widget
     def plot_basic():
-        var = input.var()
-        data = (
-            df.groupby("year")[var]
-              .mean()
-              .reset_index()
-        )
+        label = input.var()
+        col = VAR_MAP[label]
+
+        data = df.groupby("year")[col].mean().reset_index()
+
         fig = px.line(
             data,
             x="year",
-            y=var,
+            y=col,
             markers=True,
-            title=f"Evolución anual de {var}"
+            title=f"Evolución anual de {label}"
         )
-        return fig
-    
-    @output
-    @render.plot
-    def plot_map():
-        var = input.var_map()
-        
-        fig = px.scatter_geo(
-            df_nc,
-            lat="latitude",
-            lon="longitude",
-            color=var,
-            title=f"Mapa de {var}"
-        )
-        
         return fig
 
     
