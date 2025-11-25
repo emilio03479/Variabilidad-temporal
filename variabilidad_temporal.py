@@ -22,61 +22,57 @@ import xarray as xr
 DATA_PATH = "ERA5_CR_2000_2025_promedios.csv"
 df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 
+# Crear columnas de tiempo
 df["year"] = df["valid_time"].dt.year
 df["month"] = df["valid_time"].dt.month
+
 df["month_name"] = df["valid_time"].dt.month_name()
 
-DATA_NC = "datos.nc"
-ds = xr.open_dataset(DATA_NC)
-df_nc = ds.to_dataframe().reset_index()
-
-# Mapa entre nombres bonitos y nombres reales
 VAR_MAP = {
     "Temperatura (°C)": "Temperatura_C",
     "Precipitación (mm)": "Precipitacion_mm",
     "Radiación (W/m²)": "Radiacion_Wm2",
 }
 
+# ============================
+# INTERFAZ
+# ============================
 app_ui = ui.page_fluid(
-    ui.h2("Análisis de la variabilidad temporal y espacial"),
+    ui.h2("Análisis de la variabilidad temporal y estacional"),
     ui.hr(),
 
+    # Serie temporal anual
     ui.input_select(
         "var",
-        "Variable a graficar:",
+        "Variable para serie temporal:",
         list(VAR_MAP.keys()),
-        selected="Temperatura (°C)"
+        selected="Temperatura (°C)",
     ),
-
     output_widget("plot_basic"),
 
     ui.hr(),
-    ui.h3("Mapa"),
 
+    # Boxplot mensual (estacionalidad y variabilidad)
+    ui.h3("Estacionalidad y variabilidad mensual (boxplot)"),
     ui.input_select(
-        "var_map",
-        "Variable para mapa:",
-        {
-            "t2m": "Temperatura (°C)",
-            "tp": "Precipitación (mm)",
-            "ssrd": "Radiación (W/m²)",
-        },
-        selected="tp"
+        "var_box",
+        "Variable para boxplot:",
+        list(VAR_MAP.keys()),
+        selected="Precipitación (mm)",
     ),
-
-    output_widget("plot_map"),
+    output_widget("plot_box"),
 )
 
+# ============================
+# SERVER
+# ============================
 def server(input, output, session):
 
-    # ==============================
-    # SERIE TEMPORAL (plotly widget)
-    # ==============================
+    # Serie temporal anual
     @render_widget
     def plot_basic():
         label = input.var()
         col = VAR_MAP[label]
-
         data = df.groupby("year")[col].mean().reset_index()
 
         fig = px.line(
@@ -84,7 +80,26 @@ def server(input, output, session):
             x="year",
             y=col,
             markers=True,
-            title=f"Evolución anual de {label}"
+            title=f"Evolución anual de {label}",
+        )
+        return fig
+
+    # Boxplot mensual
+    @render_widget
+    def plot_box():
+        label = input.var_box()
+        col = VAR_MAP[label]
+
+        # Cada observación es un mes-año; graficamos distribución por mes
+        data = df.copy()
+
+        fig = px.box(
+            data,
+            x="month",
+            y=col,
+            category_orders={"month": list(range(1, 13))},
+            labels={"month": "Mes", col: label},
+            title=f"Distribución mensual de {label} (boxplot)",
         )
         return fig
 
