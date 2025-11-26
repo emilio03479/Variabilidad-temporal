@@ -17,7 +17,7 @@ from shiny import App, ui, render
 import xarray as xr
 from shinywidgets import output_widget, render_widget
 from plotly import graph_objects as go
-
+ 
 
 
 # ============================
@@ -46,10 +46,18 @@ df_nc = ds.to_dataframe().reset_index()
 # Crear nueva columna en df_nc en °C
 df_nc["t2m_C"] = df_nc["t2m"] - 273.15
 
-VAR_MAP = {
+# Variables para series y boxplot
+VAR_MAP_SERIES = {
     "Temperatura (°C)": "Temperatura_C",
     "Precipitación (mm)": "Precipitacion_mm",
-    "Radiación (W/m²)": "Radiacion_Wm2",
+    "Radiación (W/m²)": "Radiacion_Wm2"
+}
+
+# Variables para mapas – con columnas que sí existen en df_nc
+VAR_MAP_MAPA = {
+    "Temperatura (°C)": "t2m",
+    "Precipitación (mm)": "tp",
+    "Radiación (W/m²)": "ssrd"
 }
 
 
@@ -69,10 +77,10 @@ app_ui = ui.page_fluid(
     ui.input_select(
         "var",
         "Elegir variable:",
-        list(VAR_MAP.keys()),
+        list(VAR_MAP_SERIES.keys()),
         selected="Temperatura (°C)",
     ),
-    output_widget("plot_basic"),
+    ui.output_ui("plot_basic"),
     
 
     # ============================
@@ -132,10 +140,10 @@ app_ui = ui.page_fluid(
     ui.input_select(
         "var_box",
         "Elegir variable:",
-        list(VAR_MAP.keys()),
+        list(VAR_MAP_SERIES.keys()),
         selected="Precipitación (mm)",
     ),
-    output_widget("plot_box"),
+    ui.output_ui("plot_box"),
 
 )
 
@@ -149,10 +157,11 @@ def server(input, output, session):
     # ============================
     # SERIE TEMPORAL ANUAL
     # ============================
-    @render_widget
+    @output
+    @render.ui
     def plot_basic():
         label = input.var()
-        col = VAR_MAP[label]
+        col = VAR_MAP_SERIES[label]
         data = df.groupby("year")[col].mean().reset_index()
 
         fig = px.line(
@@ -163,7 +172,8 @@ def server(input, output, session):
             title=f"Serie temporal anual de {label} en Costa Rica",
             labels={"year": "Año", col: label},
         )
-        return fig
+        
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
     
     # ============================
     # FILTRO MES/AÑO
@@ -182,7 +192,6 @@ def server(input, output, session):
     # =============== MAPA RADIACION ==================
     @output
     @render.ui
-
     def map_radiacion():
         data = filtrar_mes_anio()
         fig = px.scatter_mapbox(
@@ -197,18 +206,15 @@ def server(input, output, session):
             height=600,
         )
 
-        fig.update_layout(mapbox_style="open-street-map")  # estilo básico
-        fig.update_coloraxes(colorbar=dict(title="W/m²", len=0.7, y=0.5))
+        fig.update_layout(mapbox_style="open-street-map", uirevision=True)
 
-      
-        return ui.HTML(fig.to_html(full_html=False))
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
 
     
     # =============== MAPA TEMPERATURA ==================
     @output
     @render.ui
-
     def map_temperatura():
         data = filtrar_mes_anio()
         fig = px.scatter_mapbox(
@@ -223,15 +229,13 @@ def server(input, output, session):
             height=600,
         )
 
-        fig.update_layout(mapbox_style="open-street-map")  # estilo básico
-        fig.update_coloraxes(colorbar=dict(title="°C", len=0.7, y=0.5))
-        
-        return ui.HTML(fig.to_html(full_html=False))
+        fig.update_layout(mapbox_style="open-street-map", uirevision=True)
+
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
     # =============== MAPA PRECIPITACIÓN ==================
     @output
     @render.ui
-
     def map_precipitacion():
         data = filtrar_mes_anio()
         fig = px.scatter_mapbox(
@@ -246,10 +250,9 @@ def server(input, output, session):
             height=600,
         )
 
-        fig.update_layout(mapbox_style="open-street-map")  # estilo básico
-        fig.update_coloraxes(colorbar=dict(title="mm", len=0.7, y=0.5))
-        
-        return ui.HTML(fig.to_html(full_html=False))
+        fig.update_layout(mapbox_style="open-street-map", uirevision=True)
+
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
 
     
@@ -258,10 +261,11 @@ def server(input, output, session):
     # ============================
     # BOXPLOT
     # ============================
-    @render_widget
+    @output
+    @render.ui
     def plot_box():
         label = input.var_box()
-        col = VAR_MAP[label]
+        col = VAR_MAP_SERIES[label]
 
         # ============================
         # OBSERVACIÓN = MES/AÑO
@@ -277,8 +281,7 @@ def server(input, output, session):
             title=f"Distribución mensual de {label} en Costa Rica",
         )
 
-        return fig
-
+        return ui.HTML(fig.to_html(full_html=False, include_plotlyjs="cdn"))
 
 
 # ============================
@@ -288,5 +291,5 @@ def server(input, output, session):
 app = App(app_ui, server)
 
 
-#if __name__ == "__main__":
-    #app.run()
+if __name__ == "__main__":
+    app.run()
