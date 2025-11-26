@@ -9,10 +9,10 @@ Created on Fri Nov 21 20:32:35 2025
 # LIBRERIAS
 # ============================
 
-import shiny
 import pandas as pd
 import plotly.express as px
-from shiny import App, ui, render
+from shiny import App, ui
+from shinywidgets import render_widget, output_widget
 import xarray as xr
 from shinywidgets import output_widget, render_widget
 
@@ -27,7 +27,8 @@ df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 # Crear columnas de tiempo
 df["year"] = df["valid_time"].dt.year
 df["month"] = df["valid_time"].dt.month
-df["month_name"] = df["valid_time"].dt.month_name()  # si el locale da problema, lo dejamos así
+
+df["month_name"] = df["valid_time"].dt.month_name()
 
 
 DATA_NC = "datos.nc"
@@ -37,26 +38,36 @@ ds = xr.open_dataset(DATA_NC)
 # Convertir a dataframe
 df_nc = ds.to_dataframe().reset_index()
 
+VAR_MAP = {
+    "Temperatura (°C)": "Temperatura_C",
+    "Precipitación (mm)": "Precipitacion_mm",
+    "Radiación (W/m²)": "Radiacion_Wm2",
+}
+
+
 
 # ============================
-# INTERFAZ BÁSICA (UI)
+# INTERFAZ
 # ============================
-
 app_ui = ui.page_fluid(
+
     
     ui.h2("Analisis de la variabilidad temporal y espacial de precipitación"),
     ui.hr(),
     
+
+    ui.h2("Análisis de la variabilidad temporal y estacional"),
+    ui.hr(),
+
+    # Serie temporal anual
+
     ui.input_select(
         "var",
-        "Variable a graficar:",
-        {
-            "Temperatura_C": "Temperatura (°C)",
-            "Precipitacion_mm": "Precipitación (mm)",
-            "Radiacion_Wm2": "Radiación (W/m²)",
-        },
-        selected="Temperatura_C",
+        "Variable para serie temporal:",
+        list(VAR_MAP.keys()),
+        selected="Temperatura (°C)",
     ),
+
     ui.output_plot("plot_basic"),
     
     
@@ -105,30 +116,43 @@ app_ui = ui.page_fluid(
             )
         )
     )
+
+    output_widget("plot_basic"),
+
+    ui.hr(),
+
+    # Boxplot mensual (estacionalidad y variabilidad)
+    ui.h3("Estacionalidad y variabilidad mensual (boxplot)"),
+    ui.input_select(
+        "var_box",
+        "Variable para boxplot:",
+        list(VAR_MAP.keys()),
+        selected="Precipitación (mm)",
+    ),
+    output_widget("plot_box"),
+
 )
 # ============================
 # SERVER
 # ============================
-
 def server(input, output, session):
 
-    @output #DECORADOR: Conecta una función del servidor con un espacio visible en la interfaz.
-    @render.plot #RENDER: Indica qué tipo de cosa genera la función (ej:plot).
+    # Serie temporal anual
+    @render_widget
     def plot_basic():
-        var = input.var()
-        data = (
-            df.groupby("year")[var]
-              .mean()
-              .reset_index()
-        )
+        label = input.var()
+        col = VAR_MAP[label]
+        data = df.groupby("year")[col].mean().reset_index()
+
         fig = px.line(
             data,
             x="year",
-            y=var,
+            y=col,
             markers=True,
-            title=f"Evolución anual de {var}"
+            title=f"Evolución anual de {label}",
         )
         return fig
+
     
     # =============== FILTRO MES / AÑO ==================
     def filtrar_mes_anio():
@@ -160,6 +184,26 @@ def server(input, output, session):
             scope="north america",
             center=dict(lat=9.7, lon=-84.0),
             projection_scale=20
+        )
+
+
+
+    # Boxplot mensual
+    @render_widget
+    def plot_box():
+        label = input.var_box()
+        col = VAR_MAP[label]
+
+        # Cada observación es un mes-año; graficamos distribución por mes
+        data = df.copy()
+
+        fig = px.box(
+            data,
+            x="month",
+            y=col,
+            category_orders={"month": list(range(1, 13))},
+            labels={"month": "Mes", col: label},
+            title=f"Distribución mensual de {label} (boxplot)",
         )
 
         return fig
