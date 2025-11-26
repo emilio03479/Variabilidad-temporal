@@ -9,12 +9,13 @@ Created on Fri Nov 21 20:32:35 2025
 # LIBRERIAS
 # ============================
 
+import shiny
 import pandas as pd
 import plotly.express as px
-from shiny import App, ui
-from shinywidgets import render_widget, output_widget
+from shiny import App, ui, render
 import xarray as xr
 from shinywidgets import output_widget, render_widget
+from plotly import graph_objects as go
 
 
 # ============================
@@ -37,6 +38,8 @@ ds = xr.open_dataset(DATA_NC)
 
 # Convertir a dataframe
 df_nc = ds.to_dataframe().reset_index()
+# Crear nueva columna en df_nc en °C
+df_nc["t2m_C"] = df_nc["t2m"] - 273.15
 
 VAR_MAP = {
     "Temperatura (°C)": "Temperatura_C",
@@ -96,7 +99,7 @@ app_ui = ui.page_fluid(
             4,
             ui.card(
                 ui.card_header("Radiación (W/m²)"),
-                output_widget("map_radiacion")
+                ui.output_ui("map_radiacion")
                 )
         ),
         
@@ -104,7 +107,7 @@ app_ui = ui.page_fluid(
             4,
             ui.card(
                 ui.card_header("Temperatura (ºC)"),
-                output_widget("map_temperatura")
+                ui.output_ui("map_temperatura")
             )
         ),
         
@@ -112,25 +115,10 @@ app_ui = ui.page_fluid(
             4,
             ui.card(
                 ui.card_header("Precipitación(mm)"),
-               output_widget("map_precipitacion")
+                ui.output_ui("map_precipitacion")
             )
         )
     )
-
-    output_widget("plot_basic"),
-
-    ui.hr(),
-
-    # Boxplot mensual (estacionalidad y variabilidad)
-    ui.h3("Estacionalidad y variabilidad mensual (boxplot)"),
-    ui.input_select(
-        "var_box",
-        "Variable para boxplot:",
-        list(VAR_MAP.keys()),
-        selected="Precipitación (mm)",
-    ),
-    output_widget("plot_box"),
-
 )
 # ============================
 # SERVER
@@ -166,96 +154,77 @@ def server(input, output, session):
         return df_filtro
 
     # =============== MAPA RADIACION ==================
-    @render_widget
+    @output
+    @render.ui
 
     def map_radiacion():
         data = filtrar_mes_anio()
-
-        fig = px.scatter_geo(
+        fig = px.scatter_mapbox(
             data,
             lat="latitude",
             lon="longitude",
             color="ssrd",
             title=f"Radiación (W/m²) — {input.mes_map()} / {input.anio_map()}",
-            color_continuous_scale="turbo"
+            color_continuous_scale="turbo",
+            zoom=5.8,  # ajusta zoom según Costa Rica
+            center={"lat": 9.9, "lon": -84.3},
+            height=600,
         )
 
-        fig.update_geos(
-            scope="north america",
-            center=dict(lat=9.7, lon=-84.0),
-            projection_scale=20
-        )
+        fig.update_layout(mapbox_style="open-street-map")  # estilo básico
+        fig.update_coloraxes(colorbar=dict(title="W/m²", len=0.7, y=0.5))
 
-
-
-    # Boxplot mensual
-    @render_widget
-    def plot_box():
-        label = input.var_box()
-        col = VAR_MAP[label]
-
-        # Cada observación es un mes-año; graficamos distribución por mes
-        data = df.copy()
-
-        fig = px.box(
-            data,
-            x="month",
-            y=col,
-            category_orders={"month": list(range(1, 13))},
-            labels={"month": "Mes", col: label},
-            title=f"Distribución mensual de {label} (boxplot)",
-        )
-
-        return fig
+      
+        return ui.HTML(fig.to_html(full_html=False))
 
     # =============== MAPA TEMPERATURA ==================
-    @render_widget
+    @output
+    @render.ui
 
     def map_temperatura():
         data = filtrar_mes_anio()
-
-        fig = px.scatter_geo(
+        fig = px.scatter_mapbox(
             data,
             lat="latitude",
             lon="longitude",
-            color="t2m",
+            color="t2m_C",
             title=f"Temperatura (°C) — {input.mes_map()} / {input.anio_map()}",
-            color_continuous_scale="turbo"
+            color_continuous_scale="turbo",
+            zoom=5.8,  # ajusta zoom según Costa Rica
+            center={"lat": 9.9, "lon": -84.3},
+            height=600,
         )
 
-        fig.update_geos(
-            scope="north america",
-            center=dict(lat=9.7, lon=-84.0),
-            projection_scale=20
-        )
-
-        return fig
+        fig.update_layout(mapbox_style="open-street-map")  # estilo básico
+        fig.update_coloraxes(colorbar=dict(title="°C", len=0.7, y=0.5))
+        
+        return ui.HTML(fig.to_html(full_html=False))
 
     # =============== MAPA PRECIPITACIÓN ==================
-    @render_widget
+    @output
+    @render.ui
 
     def map_precipitacion():
         data = filtrar_mes_anio()
-
-        fig = px.scatter_geo(
+        fig = px.scatter_mapbox(
             data,
             lat="latitude",
             lon="longitude",
             color="tp",
             title=f"Precipitación (mm) — {input.mes_map()} / {input.anio_map()}",
-            color_continuous_scale="RdBu_r"
+            color_continuous_scale="RdBu_r",
+            zoom=5.8,  # ajusta zoom según Costa Rica
+            center={"lat": 9.9, "lon": -84.3},
+            height=600,
         )
 
-        fig.update_geos(
-            scope="north america",
-            center=dict(lat=9.7, lon=-84.0),
-            projection_scale=20
-        )
-
-        return fig
+        fig.update_layout(mapbox_style="open-street-map")  # estilo básico
+        fig.update_coloraxes(colorbar=dict(title="mm", len=0.7, y=0.5))
+        
+        return ui.HTML(fig.to_html(full_html=False))
 
 
-    
+
 # ============================
 # EJECUCIÓN DE LA APP
 # ============================
