@@ -8,13 +8,11 @@ Created on Fri Nov 21 20:32:35 2025
 # ============================
 # LIBRERIAS
 # ============================
-
 import pandas as pd
 import plotly.express as px
 from shiny import App, ui
 from shinywidgets import render_widget, output_widget
 import xarray as xr
-from shinywidgets import output_widget, render_widget
 
 
 # ============================
@@ -24,10 +22,11 @@ from shinywidgets import output_widget, render_widget
 DATA_PATH = "ERA5_CR_2000_2025_promedios.csv"
 df = pd.read_csv(DATA_PATH, parse_dates=["valid_time"])
 
-# Crear columnas de tiempo
+# ============================
+# CREAR COLUMNAS A TIEMPO
+# ============================
 df["year"] = df["valid_time"].dt.year
 df["month"] = df["valid_time"].dt.month
-
 df["month_name"] = df["valid_time"].dt.month_name()
 
 
@@ -35,7 +34,9 @@ DATA_NC = "datos.nc"
 ds = xr.open_dataset(DATA_NC)
 
 
-# Convertir a dataframe
+# ============================
+# CONVERTIR A DATAFRAME
+# ============================
 df_nc = ds.to_dataframe().reset_index()
 
 VAR_MAP = {
@@ -45,43 +46,43 @@ VAR_MAP = {
 }
 
 
-
 # ============================
 # INTERFAZ
 # ============================
+
 app_ui = ui.page_fluid(
-
-    
-    ui.h2("Analisis de la variabilidad temporal y espacial de precipitación"),
+    ui.h1("Análisis de la variabilidad climática en Costa Rica (2000–2025)"),
     ui.hr(),
     
-
-    ui.h2("Análisis de la variabilidad temporal y estacional"),
-    ui.hr(),
-
-    # Serie temporal anual
-
+    # ============================
+    # SERIE TEMPORAL ANUAL
+    # ============================
+    ui.h2("Serie temporal anual de la temperatura, precipitación o radiación"),
+    
     ui.input_select(
         "var",
-        "Variable para serie temporal:",
+        "Elegir variable:",
         list(VAR_MAP.keys()),
         selected="Temperatura (°C)",
     ),
+    output_widget("plot_basic"),
+    
 
-    ui.output_plot("plot_basic"),
-    
-    
+    # ============================
+    # MAPA CLIMATICO
+    # ============================
     ui.hr(),
-    ui.h3("Mapas climáticos para Costa Rica"),
+    ui.h3("Mapas climáticos mensuales de radiación, temperatura y precipitación en Costa Rica"),
+    
     ui.input_select(
         "anio_map",
-        "Año:",
+        "Elegir año:",
         sorted(df_nc["valid_time"].dt.year.unique().astype(str))
     ),
     
     ui.input_select(
         "mes_map",
-        "Mes:",
+        "Elegir mes:",
         {
             "1":"Enero", "2": "Febrero", "3": "Marzo", 
             "4": "Abril", "5": "Mayo", "6": "Junio",
@@ -91,53 +92,56 @@ app_ui = ui.page_fluid(
     ),
     
     ui.row(
-        
         ui.column(
             4,
             ui.card(
                 ui.card_header("Radiación (W/m²)"),
-                output_widget("map_radiacion")
-                )
+                output_widget("map_radiacion"),
+            ),
         ),
         
         ui.column(
             4,
             ui.card(
                 ui.card_header("Temperatura (ºC)"),
-                output_widget("map_temperatura")
-            )
+                output_widget("map_temperatura"),
+            ),
         ),
         
         ui.column(
             4,
             ui.card(
-                ui.card_header("Precipitación(mm)"),
-               output_widget("map_precipitacion")
-            )
-        )
-    )
+                ui.card_header("Precipitación (mm)"),
+               output_widget("map_precipitacion"),
+            ),
+        ),
+    ),
 
-    output_widget("plot_basic"),
-
+    # ============================
+    # BOXPLOT MENSUAL
+    # ============================
     ui.hr(),
-
-    # Boxplot mensual (estacionalidad y variabilidad)
-    ui.h3("Estacionalidad y variabilidad mensual (boxplot)"),
+    ui.h3("Variabilidad mensual de la temperatura, precipitación o radiación"),
+    
     ui.input_select(
         "var_box",
-        "Variable para boxplot:",
+        "Elegir variable:",
         list(VAR_MAP.keys()),
         selected="Precipitación (mm)",
     ),
     output_widget("plot_box"),
-
 )
+
+
 # ============================
 # SERVER
 # ============================
+
 def server(input, output, session):
 
-    # Serie temporal anual
+    # ============================
+    # SERIE TEMPORAL ANUAL
+    # ============================
     @render_widget
     def plot_basic():
         label = input.var()
@@ -149,12 +153,14 @@ def server(input, output, session):
             x="year",
             y=col,
             markers=True,
-            title=f"Evolución anual de {label}",
+            title=f"Serie temporal anual de {label} en Costa Rica",
+            labels={"year": "Año", col: label},
         )
         return fig
-
     
-    # =============== FILTRO MES / AÑO ==================
+    # ============================
+    # FILTRO MES/AÑO
+    # ============================
     def filtrar_mes_anio():
         anio = int(input.anio_map())
         mes = int(input.mes_map())
@@ -165,9 +171,10 @@ def server(input, output, session):
         ]
         return df_filtro
 
-    # =============== MAPA RADIACION ==================
+    # ============================
+    # MAPA RADIACIÓN
+    # ============================
     @render_widget
-
     def map_radiacion():
         data = filtrar_mes_anio()
 
@@ -176,7 +183,7 @@ def server(input, output, session):
             lat="latitude",
             lon="longitude",
             color="ssrd",
-            title=f"Radiación (W/m²) — {input.mes_map()} / {input.anio_map()}",
+            title=f"Mapa de radiación (W/m²) — mes {input.mes_map()} / {input.anio_map()}",
             color_continuous_scale="turbo"
         )
 
@@ -185,32 +192,13 @@ def server(input, output, session):
             center=dict(lat=9.7, lon=-84.0),
             projection_scale=20
         )
-
-
-
-    # Boxplot mensual
-    @render_widget
-    def plot_box():
-        label = input.var_box()
-        col = VAR_MAP[label]
-
-        # Cada observación es un mes-año; graficamos distribución por mes
-        data = df.copy()
-
-        fig = px.box(
-            data,
-            x="month",
-            y=col,
-            category_orders={"month": list(range(1, 13))},
-            labels={"month": "Mes", col: label},
-            title=f"Distribución mensual de {label} (boxplot)",
-        )
-
+        
         return fig
-
-    # =============== MAPA TEMPERATURA ==================
+    
+    # ============================
+    # MAPA TEMPERATURA
+    # ============================
     @render_widget
-
     def map_temperatura():
         data = filtrar_mes_anio()
 
@@ -219,7 +207,7 @@ def server(input, output, session):
             lat="latitude",
             lon="longitude",
             color="t2m",
-            title=f"Temperatura (°C) — {input.mes_map()} / {input.anio_map()}",
+            title=f"Mapa de temperatura (°C) — mes {input.mes_map()} / {input.anio_map()}",
             color_continuous_scale="turbo"
         )
 
@@ -231,9 +219,10 @@ def server(input, output, session):
 
         return fig
 
-    # =============== MAPA PRECIPITACIÓN ==================
+    # ============================
+    # MAPA PRECIPITACIÓN
+    # ============================
     @render_widget
-
     def map_precipitacion():
         data = filtrar_mes_anio()
 
@@ -242,7 +231,7 @@ def server(input, output, session):
             lat="latitude",
             lon="longitude",
             color="tp",
-            title=f"Precipitación (mm) — {input.mes_map()} / {input.anio_map()}",
+            title=f"Mapa de precipitación (mm) — mes {input.mes_map()} / {input.anio_map()}",
             color_continuous_scale="RdBu_r"
         )
 
@@ -254,6 +243,31 @@ def server(input, output, session):
 
         return fig
 
+    # ============================
+    # BOXPLOT
+    # ============================
+    @render_widget
+    def plot_box():
+        label = input.var_box()
+        col = VAR_MAP[label]
+
+        # ============================
+        # OBSERVACIÓN = MES/AÑO
+        # ============================
+        data = df.copy()
+
+        fig = px.box(
+            data,
+            x="month",
+            y=col,
+            category_orders={"month": list(range(1, 13))},
+            labels={"month": "Mes", col: label},
+            title=f"Distribución mensual de {label} en Costa Rica",
+        )
+
+        return fig
+
+
 
     
 # ============================
@@ -263,5 +277,5 @@ def server(input, output, session):
 app = App(app_ui, server)
 
 
-if __name__ == "__main__":
-    app.run()
+#if __name__ == "__main__":
+    #app.run()
